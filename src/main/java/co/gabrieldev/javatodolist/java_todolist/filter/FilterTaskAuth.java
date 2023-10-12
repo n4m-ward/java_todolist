@@ -21,34 +21,39 @@ public class FilterTaskAuth extends OncePerRequestFilter {
     private IUserRepository userRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        String[] credentials = this.getCredentials(request);
-        if(credentials == null) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
-        String username = credentials[0];
-        UserModel user = this.userRepository.findByUsername(username);
-        if(user == null) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
+        try {
+            if (request.getServletPath().equals("/users/")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-        String password = credentials[1];
-        if(!user.passwordMatch(password)) {
+            String[] credentials = this.getCredentials(request);
+            String username = credentials[0];
+            UserModel user = this.userRepository.findByUsername(username);
+
+            if (user == null) {
+                throw new Exception("Unauthorized");
+            }
+
+            String password = credentials[1];
+            if (!user.passwordMatch(password)) {
+                throw new Exception("Unauthorized");
+            }
+            request.setAttribute("userId", user.getId());
+            filterChain.doFilter(request, response);
+        } catch (Exception e) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
         }
-        System.out.println(username);
-        System.out.println(password);
-        filterChain.doFilter(request, response);
     }
 
-    private String[] getCredentials(HttpServletRequest request) {
+    private String[] getCredentials(HttpServletRequest request) throws Exception {
         String authorization = request.getHeader("Authorization");
-        if(authorization == null) {
-            return null;
+        if (authorization == null) {
+            throw new Exception("Unauthorized");
         }
         var authEncoded = authorization.substring("Basic ".length()).trim();
         byte[] authDecoded = Base64.getDecoder().decode(authEncoded);
@@ -56,4 +61,3 @@ public class FilterTaskAuth extends OncePerRequestFilter {
         return authString.split(":");
     }
 }
-
